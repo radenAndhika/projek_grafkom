@@ -221,6 +221,9 @@ class App:
                 w, h = self.canvas.pixel_surface.get_size()
                 if 0 <= cx < w and 0 <= cy < h:
                     self.canvas.save_state()
+                    # Flatten semua shapes ke pixel_surface agar flood fill
+                    # bisa "melihat" batas shape dan mengisi hanya di dalamnya.
+                    self._flatten_shapes_to_pixel()
                     flood_fill(self.canvas.pixel_surface, cx, cy, color)
                     self.canvas.save_state()
             return
@@ -357,6 +360,19 @@ class App:
                         self.preview_points = [
                             ('triangle', [(mid_x, sy), (sx, ey), (ex, ey)])
                         ]
+
+    def _flatten_shapes_to_pixel(self):
+        """
+        Render semua Shape (vector layer) ke pixel_surface, lalu hapus dari
+        shapes list. Dipanggil sebelum flood fill agar batas shape terlihat
+        oleh algoritma fill, sehingga fill tidak meluber ke luar bentuk.
+        """
+        if not self.canvas.shapes:
+            return
+        for shape in self.canvas.shapes:
+            shape.draw(self.canvas.pixel_surface)
+        self.canvas.shapes.clear()
+        self.canvas.selected_shape = None
 
     def _finish_text(self):
         if self.text_buffer.strip():
