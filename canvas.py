@@ -19,12 +19,13 @@ class Shape:
     """
 
     def __init__(self, shape_type, points, color=(255, 0, 0),
-                 thickness=2, filled=False):
+                 thickness=2, filled=False, fill_color=None):
         self.shape_type = shape_type   # 'rect', 'circle', 'triangle', 'polygon'
         self.points = [list(p) for p in points]  # list of [x, y]
         self.color = color
         self.thickness = thickness
         self.filled = filled
+        self.fill_color = fill_color   # Warna isi (None = gunakan self.color)
         self.selected = False
 
         # Untuk animasi bouncing
@@ -67,8 +68,41 @@ class Shape:
         return (bx - margin <= mx <= bx + bw + margin and
                 by - margin <= my <= by + bh + margin)
 
+    def hit_test(self, mx, my):
+        """Cek apakah titik (mx, my) ada di DALAM shape (presisi per shape type)."""
+        pts = [(int(p[0]), int(p[1])) for p in self.points]
+
+        if self.shape_type == 'rect' and len(pts) == 2:
+            x0, y0 = pts[0]
+            x1, y1 = pts[1]
+            return min(x0, x1) <= mx <= max(x0, x1) and min(y0, y1) <= my <= max(y0, y1)
+
+        elif self.shape_type == 'circle' and len(pts) == 2:
+            cx, cy = pts[0]
+            rx, ry = pts[1]
+            radius = math.hypot(rx - cx, ry - cy)
+            return math.hypot(mx - cx, my - cy) <= radius
+
+        elif self.shape_type in ('triangle', 'polygon') and len(pts) >= 3:
+            # Ray casting algorithm
+            n = len(pts)
+            inside = False
+            j = n - 1
+            for i in range(n):
+                xi, yi = pts[i]
+                xj, yj = pts[j]
+                if ((yi > my) != (yj > my)) and (
+                        mx < (xj - xi) * (my - yi) / (yj - yi) + xi):
+                    inside = not inside
+                j = i
+            return inside
+
+        return False
+
     def draw(self, surface):
         pts_int = [(int(p[0]), int(p[1])) for p in self.points]
+        # Warna isi: pakai fill_color jika ada, fallback ke color
+        fc = self.fill_color if self.fill_color is not None else self.color
 
         if self.selected:
             # Gambar outline seleksi
@@ -78,7 +112,8 @@ class Shape:
 
         if self.shape_type == 'polygon' and len(pts_int) >= 2:
             if len(pts_int) >= 3 and self.filled:
-                pygame.draw.polygon(surface, self.color, pts_int)
+                pygame.draw.polygon(surface, fc, pts_int)
+                pygame.draw.polygon(surface, self.color, pts_int, self.thickness)
             elif len(pts_int) >= 3:
                 pygame.draw.polygon(surface, self.color, pts_int, self.thickness)
             else:
@@ -90,9 +125,8 @@ class Shape:
             rect = pygame.Rect(min(x0, x1), min(y0, y1),
                                abs(x1 - x0), abs(y1 - y0))
             if self.filled:
-                pygame.draw.rect(surface, self.color, rect)
-            else:
-                pygame.draw.rect(surface, self.color, rect, self.thickness)
+                pygame.draw.rect(surface, fc, rect)
+            pygame.draw.rect(surface, self.color, rect, self.thickness)
 
         elif self.shape_type == 'circle' and len(pts_int) == 2:
             cx, cy = pts_int[0]
@@ -100,16 +134,14 @@ class Shape:
             radius = int(math.hypot(rx - cx, ry - cy))
             if radius > 0:
                 if self.filled:
-                    pygame.draw.circle(surface, self.color, (cx, cy), radius)
-                else:
-                    pygame.draw.circle(surface, self.color, (cx, cy), radius,
-                                       self.thickness)
+                    pygame.draw.circle(surface, fc, (cx, cy), radius)
+                pygame.draw.circle(surface, self.color, (cx, cy), radius,
+                                   self.thickness)
 
         elif self.shape_type == 'triangle' and len(pts_int) == 3:
             if self.filled:
-                pygame.draw.polygon(surface, self.color, pts_int)
-            else:
-                pygame.draw.polygon(surface, self.color, pts_int, self.thickness)
+                pygame.draw.polygon(surface, fc, pts_int)
+            pygame.draw.polygon(surface, self.color, pts_int, self.thickness)
 
         elif self.shape_type == 'line_segment' and len(pts_int) == 2:
             pygame.draw.line(surface, self.color, pts_int[0], pts_int[1],

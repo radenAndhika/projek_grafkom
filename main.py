@@ -221,12 +221,26 @@ class App:
                 w, h = self.canvas.pixel_surface.get_size()
                 if 0 <= cx < w and 0 <= cy < h:
                     self.canvas.save_state()
-                    # Flatten semua shapes ke pixel_surface agar flood fill
-                    # bisa "melihat" batas shape dan mengisi hanya di dalamnya.
-                    self._flatten_shapes_to_pixel()
-                    flood_fill(self.canvas.pixel_surface, cx, cy, color)
+
+                    # Prioritas: cek apakah klik mengenai shape vector (terbalik = atas dulu)
+                    hit_shape = None
+                    for shape in reversed(self.canvas.shapes):
+                        if shape.hit_test(cx, cy):
+                            hit_shape = shape
+                            break
+
+                    if hit_shape:
+                        # Fill langsung ke shape object → ikut gerak saat animasi
+                        hit_shape.filled = True
+                        hit_shape.fill_color = color
+                    else:
+                        # Tidak ada shape → flood fill pada pixel_surface
+                        # Gunakan composite agar batas shape tetap dihormati
+                        self._bucket_fill_composite(cx, cy, color)
+
                     self.canvas.save_state()
             return
+
 
         # ── TOOL: TEXT ──
         if tool == 'text':
@@ -361,18 +375,30 @@ class App:
                             ('triangle', [(mid_x, sy), (sx, ey), (ex, ey)])
                         ]
 
-    def _flatten_shapes_to_pixel(self):
+    def _bucket_fill_composite(self, cx, cy, fill_color):
         """
-        Render semua Shape (vector layer) ke pixel_surface, lalu hapus dari
-        shapes list. Dipanggil sebelum flood fill agar batas shape terlihat
-        oleh algoritma fill, sehingga fill tidak meluber ke luar bentuk.
+        Flood fill yang menghormati batas shapes tanpa merusak shapes list.
+
+        Cara kerja:
+        1. Buat composite surface sementara = pixel_surface + semua shapes
+        2. Jalankan flood fill pada composite → dapat set piksel yang di-fill
+        3. Terapkan piksel tersebut ke pixel_surface asli
+        4. shapes list TIDAK diubah → animasi tetap berjalan
         """
-        if not self.canvas.shapes:
-            return
+        w, h = self.canvas.pixel_surface.get_size()
+
+        # Buat composite sementara
+        composite = self.canvas.pixel_surface.copy()
         for shape in self.canvas.shapes:
-            shape.draw(self.canvas.pixel_surface)
-        self.canvas.shapes.clear()
-        self.canvas.selected_shape = None
+            shape.draw(composite)
+
+        # Flood fill pada composite, dapatkan set piksel yang berubah
+        filled_pixels = flood_fill(composite, cx, cy, fill_color)
+
+        # Terapkan hasil fill ke pixel_surface asli
+        fill_rgb = fill_color[:3]
+        for px, py in filled_pixels:
+            self.canvas.pixel_surface.set_at((px, py), fill_rgb)
 
     def _finish_text(self):
         if self.text_buffer.strip():

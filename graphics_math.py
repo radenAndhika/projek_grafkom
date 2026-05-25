@@ -98,6 +98,7 @@ def flood_fill(surface, x, y, fill_color):
     surface: pygame.Surface
     x, y: titik awal fill
     fill_color: tuple (R, G, B)
+    Mengembalikan set of (x, y) piksel yang berhasil di-fill.
     """
     import pygame
     width, height = surface.get_size()
@@ -105,7 +106,7 @@ def flood_fill(surface, x, y, fill_color):
     fill_color_3 = fill_color[:3]
 
     if target_color == fill_color_3:
-        return  # Warna sudah sama, tidak perlu fill
+        return set()  # Warna sudah sama, tidak perlu fill
 
     stack = [(x, y)]
     visited = set()
@@ -122,6 +123,8 @@ def flood_fill(surface, x, y, fill_color):
         visited.add((cx, cy))
         surface.set_at((cx, cy), fill_color_3)
         stack.extend([(cx + 1, cy), (cx - 1, cy), (cx, cy + 1), (cx, cy - 1)])
+
+    return visited
 
 
 # ─────────────────────────────────────────────
